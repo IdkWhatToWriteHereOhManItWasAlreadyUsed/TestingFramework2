@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\TestAssembly",
+    "\\Tests",
+    "\\TestsFramework\\Assert",
+    "\\TestsRunner"
+  ],
+  "SelectedNode": "\\Tests\\Tests.csproj",
+  "PreviewInSolutionExplorer": false
+}

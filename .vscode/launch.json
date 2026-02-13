@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Runner",
+            "type": "coreclr", // Тип отладчика для .NET
+            "request": "launch",
+            "preLaunchTask": "build", // Выполнит задачу из tasks.json перед запуском
+            "program": "/home/dmitry/SPP/Testing_framework/TestsRunner/bin/Debug/net10.0/TestsRunner", // Путь к исполняемому файлу раннера
+            "args": ["/home/dmitry/SPP/Testing_framework/Tests/bin/Debug/net10.0/Tests.dll"], // Путь к сборке с тестами
+            "stopAtEntry": false, // true, если хотите останавливаться на первой строке Main
+            "console": "integratedTerminal", // Где будет запущено приложение
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        }
+        ,
+        {
+            "name": "Run Runner",
+            "type": "", // Тип отладчика для .NET
+            "request": "launch",
+            "preLaunchTask": "build", // Выполнит задачу из tasks.json перед запуском
+            "program": "/home/dmitry/SPP/Testing_framework/TestsRunner/bin/Release/net10.0/TestsRunner", // Путь к исполняемому файлу раннера
+            "args": ["/home/dmitry/SPP/Testing_framework/Tests/bin/Debug/net10.0/Tests.dll"], // Путь к сборке с тестами
+            "stopAtEntry": false, // true, если хотите останавливаться на первой строке Main
+        }
+    ]
+}
