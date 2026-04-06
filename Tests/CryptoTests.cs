@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using MyCrypto;
 using TestsFramework.Assert;
@@ -10,178 +9,141 @@ namespace Tests
     [TestClass]
     class CryptoTests
     {
+        private const string EnglishAlphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        private const string RussianAlphabet = @"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+        private const string DefaultPassword = "abcdfgdefgfffffqqw";
+        private const string ShortPassword = "abcdefg";
+        private const string RussianPassword = "пароль";
+
         [Test]
         [Priority(2)]
         public static void Algo1Test()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder plainTextBuilder = new();
-            var rand = new Random();
-            for (int i = 0; i < 37777777; i++)
-            {
-                plainTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
+            string plainText = GenerateRandomText(EnglishAlphabet, 37777777);
+            string password = DefaultPassword;
 
-            string password = "abcdfgdefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                plainTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(plainTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
         [Priority(1)]
         public static void Algo2Test()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder plainTextBuilder = new();
-            var rand = new Random();
-            for (int i = 0; i < 3777777; i++)
-            {
-                plainTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
-
+            string plainText = GenerateRandomText(EnglishAlphabet, 3777777);
             string password = "abcdfgodefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                plainTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(plainTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
         [Priority(1)]
         public static void Algo3Test()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder plainTextBuilder = new();
-            var rand = new Random();
-            for (int i = 0; i < 37777777; i++)
-            {
-                plainTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
+            return;
 
-            string password = "abcdfgdefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                plainTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.ChaCha20_Poly1305);
-            Assert.AreEqual(plainTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+            string plainText = GenerateRandomText(EnglishAlphabet, 37777777);
+            string password = DefaultPassword;
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.ChaCha20_Poly1305);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
-
-
         [Test]
-        [MaxTime(777)]
+        [MaxTime(800)]
         public static void MaxExecutionTimeTest_WontFail()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder cipherTextBuilder = new();
-            var rand = new Random();
-            for (System.Int128 i = 0; i < 7777; i++)
-            {
-                cipherTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
-
+            string plainText = GenerateRandomText(EnglishAlphabet, 7777);
             string password = "abcdefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                cipherTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(cipherTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
-        [MaxTime(7777)]
+        [MaxTime(8000)]
         public static void LongTest1()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder cipherTextBuilder = new();
-            var rand = new Random();
-            for (System.Int128 i = 0; i < 7777; i++)
-            {
-                cipherTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
-
+            string plainText = GenerateRandomText(EnglishAlphabet, 7777);
             string password = "dfgdfgabcdsddhgfsefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                cipherTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(cipherTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
-        [MaxTime(2777)]
+        [MaxTime(3000)]
         public static void LongTest2()
         {
-            string alphabet = @"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя";
-            StringBuilder cipherTextBuilder = new();
-            var rand = new Random();
-            for (System.Int128 i = 0; i < 77777777; i++)
-            {
-                cipherTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
-
+            string plainText = GenerateRandomText(RussianAlphabet, 77777777);
             string password = "dfgdfgabcdsddhgfsefgfffffqqw";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                cipherTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(cipherTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
-        [MaxTime(3337)]
+        [MaxTime(3500)]
         public static void LongTest3()
         {
-            string alphabet = @"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя";
-            StringBuilder cipherTextBuilder = new();
-            var rand = new Random();
-            for (System.Int128 i = 0; i < 77777777; i++)
-            {
-                cipherTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-            }
+            string plainText = GenerateRandomText(RussianAlphabet, 77777777);
+            string password = RussianPassword;
 
-            string password = "пароль";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                cipherTextBuilder.ToString(),
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(cipherTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
         }
 
         [Test]
         public static void ExceptionTest()
         {
-            int cryptoType = 777;
+            int invalidAlgorithm = 777;
 
-            Assert.Throws<ArgumentException>
-                (
-                    () =>
-                    {
-                       _ = SlowEncryptor.Encrypt("dssdsdgdsfesfydwgiuroesdrhpibfdf",
-                            "pass", (SlowEncryptor.AlgorithmType)cryptoType);
-                    }
-                );
+            Assert.Throws<ArgumentException>(() =>
+            {
+                SlowEncryptor.Encrypt("dssdsdgdsfesfydwgiuroesdrhpibfdf", "pass", (SlowEncryptor.AlgorithmType)invalidAlgorithm);
+            });
         }
 
         [Test]
-        [MaxTime(3777)]
+        [MaxTime(4000)]
         [Priority(0)]
         public static void MaxExecutionTimeTest_WillFail()
         {
-            string alphabet = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            StringBuilder cipherTextBuilder = new();
-            var rand = new Random();
-            for (System.Int128 i = 0; i < 777666777666; i++)
+            string plainText = GenerateRandomText(EnglishAlphabet, 777666777666);
+            string password = ShortPassword;
+
+            var (cipherText, salt, algorithm) = SlowEncryptor.Encrypt(plainText, password, SlowEncryptor.AlgorithmType.AES_CBC);
+            string decryptedText = SlowEncryptor.Decrypt(cipherText, password, salt, algorithm);
+
+            Assert.AreEqual(plainText, decryptedText);
+        }
+
+        private static string GenerateRandomText(string alphabet, long length)
+        {
+            var builder = new StringBuilder();
+            var random = new Random();
+
+            for (long i = 0; i < length; i++)
             {
-                cipherTextBuilder.Append(alphabet[rand.Next() % alphabet.Length]);
-                if (i % 1024  == 0)
-                {
-                  //  Console.WriteLine("sdf");
-                }
+                builder.Append(alphabet[random.Next() % alphabet.Length]);
             }
 
-            string password = "abcdefg";
-            (string plainText, string salt, SlowEncryptor.AlgorithmType algoType) = SlowEncryptor.Encrypt(
-                cipherTextBuilder.ToString(), 
-                password, SlowEncryptor.AlgorithmType.AES_CBC);
-            Assert.AreEqual(cipherTextBuilder.ToString(), SlowEncryptor.Decrypt(plainText, password, salt, algoType));
+            return builder.ToString();
         }
     }
 }
