@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.5.2.0
+# Visual Studio Version 18
+VisualStudioVersion = 18.5.11626.173 insiders
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{9CF47860-2CEA-F379-09D8-9AEF27965D12}"
 EndProject
@@ -9,6 +9,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestsRunner", "TestsRunner\TestsRunner.csproj", "{1FC7D793-166D-76E9-5E52-05E1F384B603}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestsFramework", "TestsFramework\TestsFramework.csproj", "{D12765A5-0F0E-F1EE-7FAC-A9EE602CD0FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyThreading", "MyThreading\MyThreading.csproj", "{C8182225-E5EC-488D-8715-CA07C23285E2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -32,6 +34,10 @@ Global
 		{D12765A5-0F0E-F1EE-7FAC-A9EE602CD0FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D12765A5-0F0E-F1EE-7FAC-A9EE602CD0FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D12765A5-0F0E-F1EE-7FAC-A9EE602CD0FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8182225-E5EC-488D-8715-CA07C23285E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8182225-E5EC-488D-8715-CA07C23285E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8182225-E5EC-488D-8715-CA07C23285E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8182225-E5EC-488D-8715-CA07C23285E2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,29 +1,22 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using TestsFramework.Assert;
 using TestsFramework.Attributes;
+using MyThreading;
 
-namespace TestsFramework.Runner
+namespace TestsRunner
 {
-    public class TestRunner
+    public class TestRunner(string assemblyPath)
     {
-        private readonly string _assemblyPath;
-        private readonly int _maxParallelism;
-        private readonly ConcurrentBag<TestResult> _results = [];
+        private readonly string _assemblyPath = assemblyPath;
+        private readonly List<TestResult> _results = [];
         private readonly Mutex _consoleMutex = new();
-        private readonly Semaphore _testSemaphore;
         private int _completedTests = 0;
-
-        public TestRunner(string assemblyPath, int maxDegreeOfParallelism)
-        {
-            _assemblyPath = assemblyPath;
-            _maxParallelism = maxDegreeOfParallelism;
-            _testSemaphore = new Semaphore(maxDegreeOfParallelism, maxDegreeOfParallelism);
-        }
+        private int _totalTests = 0;
+        private MyThreadPool _threadPool;
 
         public void RunAllTests()
         {
@@ -33,79 +26,70 @@ namespace TestsFramework.Runner
             var testClasses = GetTestClasses(assembly);
             PrintInfo($"Найдено классов тестирования: {testClasses.Count}");
 
-            var testMethods = GetAllTestMethods(testClasses);
+            var testInstances = GetAllTestInstances(testClasses);
+            _totalTests = testInstances.Count;
+            PrintInfo($"Всего тестов: {_totalTests}");
 
-            PrintHeader($"ЗАПУСК ТЕСТОВ", ConsoleColor.Green);
-            PrintInfo($"Максимальная степень параллелизма: {_maxParallelism}");
+            if (_totalTests == 0)
+            {
+                PrintSummary();
+                return;
+            }
+
+            PrintHeader($"ЗАПУСК ТЕСТОВ (ПАРАЛЛЕЛЬНО)", ConsoleColor.Green);
             PrintSeparator();
 
-            RunTestsInParallel(testMethods);
-            PrintSummary();
-
-            _testSemaphore.Dispose();
-            _consoleMutex.Dispose();
-        }
-
-        private List<Type> GetTestClasses(Assembly assembly)
-        {
-            return assembly.GetTypes()
-                .Where(t => t.GetCustomAttribute<TestClassAttribute>() != null)
-                .ToList();
-        }
-
-        private List<(Type Class, MethodInfo Method)> GetAllTestMethods(List<Type> testClasses)
-        {
-            var methods = new List<(Type, MethodInfo)>();
-
-            foreach (var testClass in testClasses)
+            _threadPool = new MyThreadPool (
+                minThreads: 2,
+                maxThreads: Environment.ProcessorCount,
+                idleTimeout: TimeSpan.FromSeconds(2),
+                queueScaleThreshold: 5
+            )
             {
-                var testMethods = testClass.GetMethods()
-                    .Where(m => m.GetCustomAttribute<TestAttribute>() != null);
-
-                methods.AddRange(testMethods.Select(m => (testClass, m)));
-            }
-
-            return methods;
-        }
-
-        private void RunTestsInParallel(List<(Type Class, MethodInfo Method)> testMethods)
-        {
-            var threads = new List<Thread>();
-            var orderedTests = testMethods.OrderBy(x => GetPriority(x.Method));
-
-            foreach (var (testClass, testMethod) in orderedTests)
-            {
-                _testSemaphore.WaitOne();
-
-                var thread = new Thread(() => ExecuteTest(testClass, testMethod))
+                Log = msg =>
                 {
-                    IsBackground = true
-                };
-                thread.Start();
-                threads.Add(thread);
+                    Locked(() =>
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkGray;
+                        Console.WriteLine(msg);
+                        Console.ResetColor();
+                    });
+                }
+            };
+
+            _threadPool.Start();
+
+            var sortedInstances = testInstances.OrderBy(x => GetPriority(x.Method)).ToList();
+
+            foreach (var instance in sortedInstances)
+            {
+                _threadPool.Enqueue(() => ExecuteTest(instance));
             }
 
-            foreach (var thread in threads)
+            while (Interlocked.CompareExchange(ref _completedTests, 0, 0) < _totalTests)
             {
-                thread.Join();
+                Thread.Sleep(100);
             }
+
+            _threadPool.Stop();
+            PrintSummary();
         }
 
-        private void ExecuteTest(Type testClass, MethodInfo testMethod)
+        private void ExecuteTest(TestMethodInstance instance)
         {
             var testId = Interlocked.Increment(ref _completedTests);
             var startTime = DateTime.Now;
-            var testName = $"{testClass.Name}.{testMethod.Name}";
-            var maxTimeAttr = testMethod.GetCustomAttribute<MaxTimeAttribute>();
+            var testName = instance.GetDisplayName();
+            var maxTimeAttr = instance.Method.GetCustomAttribute<MaxTimeAttribute>();
 
             try
             {
                 PrintTestStart(testName, testId);
 
-                if (TrySkipTest(testMethod, testName, testId))
+                if (TrySkipTest(instance.Method, testName, testId))
                     return;
 
-                var result = RunTestMethod(testClass, testMethod, maxTimeAttr, startTime);
+                var result = RunTestMethod(instance, maxTimeAttr, startTime);
 
                 switch (result.Status)
                 {
@@ -123,12 +107,25 @@ namespace TestsFramework.Runner
                         break;
                 }
 
-                _results.Add(new TestResult(testName, result.Status, result.Message, startTime, result.Duration));
+                lock (_results)
+                {
+                    _results.Add(new TestResult(testName, result.Status, result.Message, startTime, result.Duration));
+                }
+            }
+            catch (Exception ex)
+            {
+                PrintTestError(testName, ex.Message, testId, DateTime.Now - startTime);
+                lock (_results)
+                {
+                    _results.Add(new TestResult(testName, TestRunStatus.Error, ex.Message, startTime));
+                }
             }
             finally
             {
-                CleanupTest(testClass);
-                _testSemaphore.Release();
+                if (instance.OwnerInstance == null)
+                {
+                    CleanupTest(instance.TestClass);
+                }
             }
         }
 
@@ -138,24 +135,29 @@ namespace TestsFramework.Runner
             if (skipAttr == null) return false;
 
             PrintTestSkipped(testName, skipAttr.Reason, testId);
-            _results.Add(new TestResult(testName, TestRunStatus.Skipped, skipAttr.Reason, DateTime.Now));
+            lock (_results)
+            {
+                _results.Add(new TestResult(testName, TestRunStatus.Skipped, skipAttr.Reason, DateTime.Now));
+            }
             return true;
         }
 
-        private TestRunResult RunTestMethod(Type testClass, MethodInfo method, MaxTimeAttribute? maxTimeAttr, DateTime startTime)
+        private TestRunResult RunTestMethod(TestMethodInstance instance, MaxTimeAttribute? maxTimeAttr, DateTime startTime)
         {
-            var setup = GetSetupMethod(testClass);
-            var cleanup = GetCleanupMethod(testClass);
+            var setup = GetSetupMethod(instance.TestClass);
             Exception? caughtException = null;
-            object? instance = null;
 
             var testThread = new Thread(() =>
             {
                 try
                 {
-                    instance = Activator.CreateInstance(testClass);
-                    setup?.Invoke(instance, null);
-                    method.Invoke(instance, null);
+                    if (instance.OwnerInstance == null)
+                    {
+                        instance.OwnerInstance = Activator.CreateInstance(instance.TestClass);
+                        setup?.Invoke(instance.OwnerInstance, null);
+                    }
+
+                    instance.Method.Invoke(instance.OwnerInstance, instance.Arguments);
                 }
                 catch (TargetInvocationException ex)
                 {
@@ -167,7 +169,8 @@ namespace TestsFramework.Runner
                 }
             })
             {
-                IsBackground = true
+                IsBackground = true,
+                Name = $"TestThread-{instance.Method.Name}"
             };
 
             testThread.Start();
@@ -190,7 +193,7 @@ namespace TestsFramework.Runner
             return new TestRunResult(TestRunStatus.Passed, null, duration);
         }
 
-        private bool WaitForCompletion(Thread thread)
+        private static bool WaitForCompletion(Thread thread)
         {
             thread.Join();
             return true;
@@ -212,7 +215,7 @@ namespace TestsFramework.Runner
             }
         }
 
-        private void CleanupTest(Type testClass)
+        private static void CleanupTest(Type testClass)
         {
             try
             {
@@ -226,19 +229,53 @@ namespace TestsFramework.Runner
             catch { }
         }
 
-        private MethodInfo? GetSetupMethod(Type testClass)
+        private static List<Type> GetTestClasses(Assembly assembly)
+        {
+            return [.. assembly.GetTypes().Where(t => t.GetCustomAttribute<TestClassAttribute>() != null)];
+        }
+
+        private static List<TestMethodInstance> GetAllTestInstances(List<Type> testClasses)
+        {
+            var instances = new List<TestMethodInstance>();
+
+            foreach (var testClass in testClasses)
+            {
+                var testMethods = testClass.GetMethods().Where(m => m.GetCustomAttribute<TestAttribute>() != null);
+
+                foreach (var method in testMethods)
+                {
+                    var argumentsAttrs = method.GetCustomAttributes<ArgumentsAttribute>().ToList();
+
+                    if (argumentsAttrs.Count != 0)
+                    {
+                        foreach (var attr in argumentsAttrs)
+                        {
+                            instances.Add(new TestMethodInstance(testClass, method, attr.Values));
+                        }
+                    }
+                    else
+                    {
+                        instances.Add(new TestMethodInstance(testClass, method, Array.Empty<object>()));
+                    }
+                }
+            }
+
+            return instances;
+        }
+
+        private static MethodInfo? GetSetupMethod(Type testClass)
         {
             return testClass.GetMethods()
                 .FirstOrDefault(m => m.GetCustomAttribute<SetupAttribute>() != null);
         }
 
-        private MethodInfo? GetCleanupMethod(Type testClass)
+        private static MethodInfo? GetCleanupMethod(Type testClass)
         {
             return testClass.GetMethods()
                 .FirstOrDefault(m => m.GetCustomAttribute<CleanupAttribute>() != null);
         }
 
-        private int GetPriority(MethodInfo method)
+        private static int GetPriority(MethodInfo method)
         {
             return method.GetCustomAttribute<PriorityAttribute>()?.Level ?? int.MaxValue;
         }
@@ -249,7 +286,12 @@ namespace TestsFramework.Runner
             PrintHeader(" СВОДКА РЕЗУЛЬТАТОВ ТЕСТИРОВАНИЯ ", ConsoleColor.Magenta, true);
             PrintSeparator('-');
 
-            var results = _results.ToList();
+            List<TestResult> results;
+            lock (_results)
+            {
+                results = _results.ToList();
+            }
+
             var passed = results.Count(r => r.Status == TestRunStatus.Passed);
             var failed = results.Count(r => r.Status == TestRunStatus.Failed);
             var errors = results.Count(r => r.Status == TestRunStatus.Error);
@@ -268,7 +310,9 @@ namespace TestsFramework.Runner
             if (total > 0)
             {
                 var successRate = (double)passed / total * 100;
-                var rateColor = successRate >= 80 ? ConsoleColor.Green : successRate >= 50 ? ConsoleColor.Yellow : ConsoleColor.Red;
+                var rateColor = successRate >= 80 ? ConsoleColor.Green :
+                               successRate >= 50 ? ConsoleColor.Yellow :
+                               ConsoleColor.Red;
                 PrintStat("Успешность:", $"{successRate:F1}%", rateColor);
             }
 
@@ -310,11 +354,15 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" НАЧАТ:   ", ConsoleColor.Gray);
-                WriteValue(name, ConsoleColor.DarkCyan);
-                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.Gray;
+                Console.Write($" НАЧАТ:   ");
+                Console.ForegroundColor = ConsoleColor.DarkCyan;
+                Console.WriteLine($"{name}");
+                Console.ResetColor();
             });
         }
 
@@ -322,11 +370,17 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" ПРОЙДЕН: ", ConsoleColor.Green);
-                WriteValue($"{name} ", ConsoleColor.DarkGreen);
-                WriteValue($"({duration.TotalMilliseconds:F0} мс)", ConsoleColor.DarkGray, true);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write($" ПРОЙДЕН: ");
+                Console.ForegroundColor = ConsoleColor.DarkGreen;
+                Console.Write($"{name} ");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"({duration.TotalMilliseconds:F0} мс)");
+                Console.ResetColor();
             });
         }
 
@@ -334,11 +388,18 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" ПРОВАЛ:  ", ConsoleColor.Red);
-                WriteValue(name, ConsoleColor.DarkRed);
-                WriteDetails(message, duration);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Write($" ПРОВАЛ:  ");
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.WriteLine($"{name}");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"      Причина: {message}");
+                Console.WriteLine($"      Время: {duration.TotalMilliseconds:F0} мс");
+                Console.ResetColor();
             });
         }
 
@@ -346,11 +407,18 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" ОШИБКА:  ", ConsoleColor.DarkRed);
-                WriteValue(name, ConsoleColor.Red);
-                WriteDetails(message, duration);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.Write($" ОШИБКА:  ");
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"{name}");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"      Ошибка: {message}");
+                Console.WriteLine($"      Время: {duration.TotalMilliseconds:F0} мс");
+                Console.ResetColor();
             });
         }
 
@@ -358,11 +426,18 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" ТАЙМАУТ: ", ConsoleColor.DarkYellow);
-                WriteValue(name, ConsoleColor.Yellow);
-                WriteDetails($"Превышен лимит: {timeoutMs} мс", duration);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                Console.Write($" ТАЙМАУТ: ");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"{name}");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"      Превышен лимит: {timeoutMs} мс");
+                Console.WriteLine($"      Время: {duration.TotalMilliseconds:F0} мс");
+                Console.ResetColor();
             });
         }
 
@@ -370,51 +445,18 @@ namespace TestsFramework.Runner
         {
             Locked(() =>
             {
-                WriteTimestamp();
-                WriteId(id);
-                WriteLabel(" ПРОПУЩЕН:", ConsoleColor.Yellow);
-                WriteValue(name, ConsoleColor.DarkYellow);
-                WriteLine($"      Причина: {reason}", ConsoleColor.DarkGray);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"[{id:D3}/{_totalTests}] ");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write($" ПРОПУЩЕН:");
+                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                Console.WriteLine($"{name}");
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"      Причина: {reason}");
+                Console.ResetColor();
             });
-        }
-
-        private void WriteDetails(string message, TimeSpan duration)
-        {
-            WriteLine($"      Причина: {message}", ConsoleColor.DarkGray);
-            WriteLine($"      Время: {duration.TotalMilliseconds:F0} мс", ConsoleColor.DarkGray);
-        }
-
-        private void WriteTimestamp()
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] ");
-        }
-
-        private void WriteId(int id)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write($"[{id:D3}] ");
-        }
-
-        private void WriteLabel(string text, ConsoleColor color)
-        {
-            Console.ForegroundColor = color;
-            Console.Write(text);
-        }
-
-        private void WriteValue(string text, ConsoleColor color, bool addNewLine = false)
-        {
-            Console.ForegroundColor = color;
-            Console.Write(text);
-            if (addNewLine) Console.WriteLine();
-            Console.ResetColor();
-        }
-
-        private void WriteLine(string text, ConsoleColor color)
-        {
-            Console.ForegroundColor = color;
-            Console.WriteLine(text);
-            Console.ResetColor();
         }
 
         private void PrintHeader(string text, ConsoleColor color, bool centered = false)
@@ -422,14 +464,12 @@ namespace TestsFramework.Runner
             Locked(() =>
             {
                 Console.ForegroundColor = color;
-
                 if (centered)
                 {
                     var width = Console.WindowWidth > 0 ? Console.WindowWidth : 80;
                     var padding = Math.Max(0, (width - text.Length) / 2);
                     text = new string(' ', padding) + text + new string(' ', padding);
                 }
-
                 Console.WriteLine(text);
                 Console.ResetColor();
             });
@@ -480,6 +520,23 @@ namespace TestsFramework.Runner
             _consoleMutex.WaitOne();
             try { action(); }
             finally { _consoleMutex.ReleaseMutex(); }
+        }
+
+        private class TestMethodInstance(Type testClass, MethodInfo method, object[] arguments)
+        {
+            public Type TestClass { get; } = testClass;
+            public MethodInfo Method { get; } = method;
+            public object? OwnerInstance { get; set; }
+            public object[] Arguments { get; } = arguments;
+
+            public string GetDisplayName()
+            {
+                if (Arguments.Length == 0)
+                    return $"{TestClass.Name}.{Method.Name}";
+
+                var argsStr = string.Join(", ", Arguments.Select(a => a?.ToString() ?? "null"));
+                return $"{TestClass.Name}.{Method.Name}({argsStr})";
+            }
         }
 
         private enum TestRunStatus
