@@ -21,6 +21,27 @@ namespace TestsRunner
         public TestRunner(string assemblyPath)
         {
             _assemblyPath = assemblyPath;
+
+            _threadPool = new MyThreadPool(
+                minThreads: 2,
+                maxThreads: Environment.ProcessorCount,
+                idleTimeout: TimeSpan.FromSeconds(2),
+                queueScaleThreshold: 5
+            )
+            {
+                Log = msg =>
+                {
+                    Locked(() =>
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkGray;
+                        Console.WriteLine(msg);
+                        Console.ResetColor();
+                    });
+                }
+            };
+
+            SubscribeToThreadPoolEvents();
+            _threadPool.Start();
         }
     }
 }

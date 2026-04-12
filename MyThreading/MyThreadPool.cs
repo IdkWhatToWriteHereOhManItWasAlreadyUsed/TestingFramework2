@@ -31,7 +31,7 @@ namespace MyThreading
             _maxThreads = Math.Max(minThreads, maxThreads);
             _idleTimeout = idleTimeout;
             _queueScaleThreshold = queueScaleThreshold;
-            _scaleCheckInterval = scaleCheckInterval ?? TimeSpan.FromMilliseconds(500);
+            _scaleCheckInterval = scaleCheckInterval ?? TimeSpan.FromMilliseconds(200);
         }
 
         public void Start()

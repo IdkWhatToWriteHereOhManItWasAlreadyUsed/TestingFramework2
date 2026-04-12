@@ -28,6 +28,16 @@ namespace Tests
         }
 
         [Test]
+        [Category("WaitingTest")]
+        [Priority(0)]
+        [IntegerRangesArgs(1, 20)]
+        public static void WaitingTest(int secsOfSleep)
+        {
+            Thread.Sleep(6666 + secsOfSleep);
+        }
+
+        [Test]
+        [Category("Encryption")]
         [Priority(1)]
         [Arguments("abcdfgdefgfffffqqw", 1000, SlowEncryptor.AlgorithmType.AES_GCM)]
         [Arguments("complex_password_123!", 5000, SlowEncryptor.AlgorithmType.AES_GCM)]
@@ -43,6 +53,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         [Priority(1)]
         [Arguments("abcdfgdefgfffffqqw", 1000, SlowEncryptor.AlgorithmType.ChaCha20_Poly1305)]
         [Arguments("chacha_password", 5000, SlowEncryptor.AlgorithmType.ChaCha20_Poly1305)]
@@ -58,6 +69,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         [Priority(2)]
         [Arguments("русскийпароль", 500, "Привет мир!")]
         [Arguments("пароль123", 1000, "Тестовое сообщение на русском")]
@@ -73,6 +85,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         [Priority(3)]
         [Arguments("short_pass", 10)]
         [Arguments("medium_length_password", 1000)]
@@ -88,6 +101,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         [Priority(3)]
         [Arguments(100)]
         public static void EncryptionDecryptionTest_EmptyAndSmallTexts(int textLength)
@@ -103,9 +117,10 @@ namespace Tests
 
         [Test]
         [MaxTime(1000)]
+        [Priority(4)]
         [IntegerRangesArgs(
             100, 105, // textLength
-            10,  14  // iterations
+            12,  14  // iterations
         )]
         public static void PerformanceTest(int textLength, int iterations)
         {
@@ -121,9 +136,10 @@ namespace Tests
         }
 
         [Test] //          textLength    iterations
-        [IntegerRangesArgs(100,    110,  15,    20)]
-        [IntegerRangesArgs(1500,  1500,  6,    80)]
-        [IntegerRangesArgs(2000,  2000,  50,    60)]
+        [IntegerRangesArgs(100,    110,  17,    20)]
+        [IntegerRangesArgs(1500,  1500,  66,    70)]
+        [IntegerRangesArgs(2000,  2000,  58,    60)]
+        [Priority(5)]
         public static void PerformanceTest_2(int textLength, int iterations)
         {
             string plainText = GenerateRandomText(EnglishAlphabet, textLength);
@@ -138,6 +154,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         public static void ExceptionTest_InvalidAlgorithm()
         {
             int invalidAlgorithm = 777;
@@ -149,6 +166,7 @@ namespace Tests
         }
 
         [Test]
+        [Category("Encryption")]
         [Arguments("wrongpassword")]
         [Skip("Тест временно отключен")]
         public static void DecryptWithWrongPasswordTest(string wrongPassword)

@@ -20,8 +20,10 @@ namespace TestsRunner
             PrintInfo($"Найдено классов тестирования: {testClasses.Count}");
 
             var testInstances = GetAllTestInstances(testClasses);
-            _totalTests = testInstances.Count;
-            PrintInfo($"Всего тестов: {_totalTests}");
+
+            var filteredInstances = ApplyFilter(testInstances);
+            _totalTests = filteredInstances.Count;
+            PrintInfo($"Всего тестов после фильтрации: {_totalTests}");
 
             if (_totalTests == 0)
             {
@@ -32,19 +34,8 @@ namespace TestsRunner
             PrintHeader($"ЗАПУСК ТЕСТОВ (ПАРАЛЛЕЛЬНО)", ConsoleColor.Green);
             PrintSeparator();
 
-            _threadPool = new MyThreadPool(
-                minThreads: 2,
-                maxThreads: Environment.ProcessorCount,
-                idleTimeout: TimeSpan.FromSeconds(2),
-                queueScaleThreshold: 5
-            );
-            
 
-            SubscribeToThreadPoolEvents();
-
-            _threadPool.Start();
-
-            var sortedInstances = testInstances.OrderBy(x => GetPriority(x.Method)).ToList();
+            var sortedInstances = filteredInstances.OrderBy(x => GetPriority(x.Method)).ToList();
 
             foreach (var instance in sortedInstances)
             {
@@ -56,8 +47,6 @@ namespace TestsRunner
                 Thread.Sleep(100);
             }
 
-            _threadPool.WaitForAllTasks();
-            _threadPool.StopAndWait(3000);
             PrintSummary();
         }
     }
