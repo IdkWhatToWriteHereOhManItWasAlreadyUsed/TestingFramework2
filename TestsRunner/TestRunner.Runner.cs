@@ -37,18 +37,10 @@ namespace TestsRunner
                 maxThreads: Environment.ProcessorCount,
                 idleTimeout: TimeSpan.FromSeconds(2),
                 queueScaleThreshold: 5
-            )
-            {
-                Log = msg =>
-                {
-                    Locked(() =>
-                    {
-                        Console.ForegroundColor = ConsoleColor.DarkGray;
-                        Console.WriteLine(msg);
-                        Console.ResetColor();
-                    });
-                }
-            };
+            );
+            
+
+            SubscribeToThreadPoolEvents();
 
             _threadPool.Start();
 
@@ -64,7 +56,8 @@ namespace TestsRunner
                 Thread.Sleep(100);
             }
 
-            _threadPool.Stop();
+            _threadPool.WaitForAllTasks();
+            _threadPool.StopAndWait(3000);
             PrintSummary();
         }
     }

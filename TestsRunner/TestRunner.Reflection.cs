@@ -23,18 +23,33 @@ namespace TestsRunner
 
                 foreach (var method in testMethods)
                 {
-                    var argumentsAttrs = method.GetCustomAttributes<ArgumentsAttribute>().ToList();
+                    var rangeAttrs = method.GetCustomAttributes<IntegerRangesArgs>().ToList();
 
-                    if (argumentsAttrs.Count != 0)
+                    if (rangeAttrs.Count > 0)
                     {
-                        foreach (var attr in argumentsAttrs)
+                        foreach (var rangeAttr in rangeAttrs)
                         {
-                            instances.Add(new TestMethodInstance(testClass, method, attr.Values));
+                            foreach (var combination in rangeAttr.GetAllCombinations())
+                            {
+                                instances.Add(new TestMethodInstance(testClass, method, combination));
+                            }
                         }
                     }
                     else
                     {
-                        instances.Add(new TestMethodInstance(testClass, method, Array.Empty<object>()));
+                        var argumentsAttrs = method.GetCustomAttributes<ArgumentsAttribute>().ToList();
+
+                        if (argumentsAttrs.Count != 0)
+                        {
+                            foreach (var attr in argumentsAttrs)
+                            {
+                                instances.Add(new TestMethodInstance(testClass, method, attr.Values));
+                            }
+                        }
+                        else
+                        {
+                            instances.Add(new TestMethodInstance(testClass, method, Array.Empty<object>()));
+                        }
                     }
                 }
             }

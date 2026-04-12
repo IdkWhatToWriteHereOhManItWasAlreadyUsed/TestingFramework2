@@ -8,6 +8,7 @@ namespace TestsRunner
     {
         private void PrintSummary()
         {
+            Console.ForegroundColor = ConsoleColor.White;
             PrintSeparator('=');
             PrintHeader(" СВОДКА РЕЗУЛЬТАТОВ ТЕСТИРОВАНИЯ ", ConsoleColor.Magenta, true);
             PrintSeparator('-');

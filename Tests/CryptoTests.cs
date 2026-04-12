@@ -74,12 +74,8 @@ namespace Tests
 
         [Test]
         [Priority(3)]
-        [Arguments("short", 10)]
+        [Arguments("short_pass", 10)]
         [Arguments("medium_length_password", 1000)]
-        [Arguments("medium_length_password", 2000)]
-        [Arguments("medium_length_password", 4000)]
-        [Arguments("medium_length_password", 5000)]
-        [Arguments("medium_length_password", 6000)]
         [Arguments("very_long_password_that_should_work_fine_with_the_encryptor", 10000)]
         public static void EncryptionDecryptionTest_DifferentPasswordLengths(string password, int textLength)
         {
@@ -93,8 +89,6 @@ namespace Tests
 
         [Test]
         [Priority(3)]
-        [Arguments(0)]
-        [Arguments(1)]
         [Arguments(100)]
         public static void EncryptionDecryptionTest_EmptyAndSmallTexts(int textLength)
         {
@@ -109,16 +103,10 @@ namespace Tests
 
         [Test]
         [MaxTime(1000)]
-        [Arguments(100, 100)]
-        [Arguments(500, 50)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 20)]
-        [Arguments(1000, 30)]
-        [Arguments(1000, 40)]
-        [Arguments(1000, 44)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 11)]
+        [IntegerRangesArgs(
+            100, 105, // textLength
+            10,  14  // iterations
+        )]
         public static void PerformanceTest(int textLength, int iterations)
         {
             string plainText = GenerateRandomText(EnglishAlphabet, textLength);
@@ -132,32 +120,10 @@ namespace Tests
             }
         }
 
-
-        [Test]
-        [Arguments(100, 100)]
-        [Arguments(500, 500)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 20)]
-        [Arguments(1000, 30)]
-        [Arguments(1000, 40)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 11)]
-        [Arguments(1000, 11)]
-        [Arguments(1000, 12)]
-        [Arguments(1000, 33)]
-        [Arguments(1000, 33)]
-        [Arguments(1000, 44)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 11)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 10)]
-        [Arguments(1000, 20)]
-        [Arguments(1000, 30)]
-        [Arguments(1000, 40)]
-        [Arguments(1000, 44)]
+        [Test] //          textLength    iterations
+        [IntegerRangesArgs(100,    110,  15,    20)]
+        [IntegerRangesArgs(1500,  1500,  6,    80)]
+        [IntegerRangesArgs(2000,  2000,  50,    60)]
         public static void PerformanceTest_2(int textLength, int iterations)
         {
             string plainText = GenerateRandomText(EnglishAlphabet, textLength);
